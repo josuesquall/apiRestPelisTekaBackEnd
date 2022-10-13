@@ -1,0 +1,357 @@
+<?php
+//Si ya no esta activa la session
+if(!isset($_SESSION["login"])){print "<script>window.location='index.php';</script>";}
+//si el rango de fechas no supera el dia
+if(($_SESSION['tsFin']-$_SESSION['tsIni'])<=87000){
+	$_SESSION['tsIni']=mktime(0,0,0,date('m'),1,date('Y'));
+	$_SESSION['tsFin']=mktime(23,59,59,date('m'),date('d'),date('Y'));
+}
+?>
+<link rel="stylesheet" type="text/css" href="modulos/dash/css/style.css?v=<?= time(); ?>" />
+<label class="camp2-1">
+	<span style="font-size:36px;font-weight:bold"> Ventas </span>
+</label>
+<div data-title="Exportar Reportes" data-intro="Con estos botones podrá exportar en PDF o CSV (Excel) las facturas que estén en el listado">
+<button class="btn-fa fa fa-file-pdf-o" onclick="exportPdf();"></button>
+<button class="btn-fa fa fa-file-excel-o" onclick="exportExcel();"></button>
+</div>
+<div style="clear:both;"></div>
+<h2 id="granTotalNode">Q. 0.00</h2>
+<div id="workArea"></div>
+<script type="text/javascript">
+	
+	var granTotal=0.00;
+	var today = new Date();
+	console.warn(parseInt(__LIC.tsFin),parseInt(today.getTime()/1000));
+	function SetDate(tipo,fecha){
+        core.callApiRest({module:'dash',method:'setDate',methodCB:'getVentas',fecha:fecha,tipo:tipo});
+	}
+	function initialize(){
+		var beginNormal=true;
+		
+		if(__LIC.licencia==0 && parseInt(today.getTime()/1000)>parseInt(__LIC.tsFin)){
+			noLicense();
+		}
+		if(beginNormal){
+			getVentas();
+			if(__miniTuto){
+				introJs().start();
+				__miniTuto=false;
+				core.callApiRest({requestMethod:'POST',module:'dash',method:'setMiniTuto',methodCB:''});
+			}
+			if(typeof __SESSION.metaData.servidor == 'undefined' && !__miniTuto){
+				setConfigSmtp();
+				beginNormal=false;
+			}
+		}
+	}
+	function getVentas(){
+		$("#workArea").html('');
+		var fields=new Array();
+		fields.push({ name: "metaData.Certificacion.NumeroAutorizacion.Numero", title:"Numero", type: "text", width: 5});
+		if(window.screen.width>480){
+			fields.push({ name: "metaData.Certificacion.NumeroAutorizacion.Serie", title:"Serie", type: "text", width: 5});
+			fields.push({ name: "metaData.Certificacion.FechaHoraCertificacion", title:"Fecha", width:25});
+			fields.push({ name: "cliente.NombreReceptor", title:"Cliente", type: "text", width: 5});
+			fields.push({ name: "cliente.IDReceptor", title:"NIT", type: "text", width: 5});
+			fields.push({ name: "estado", title:"Estado", width: 15, itemTemplate: function(value, item) {
+				if(parseInt(value)==1){
+					return 'Activo';
+				} else {
+					return 'Anulada';
+				}	
+			}});
+		}
+		fields.push({ name: "monto", title:"GTQ Venta", width:10, itemTemplate: function(value, item) { 
+			if(item.estado==1){
+				window.granTotal+=parseFloat(value);
+				$('#granTotalNode').html('Total Q. '+window.granTotal.toFixed(2));
+			}
+			return parseFloat(value).toFixed(2);
+		}});
+		
+		fields.push({ title:'----', width: 25, cellRenderer: function(value, item) { 
+			var td=document.createElement('td');
+			var btnAnular=document.createElement('button');
+			var btnImp=document.createElement('button');
+			
+			btnAnular.className="btn-fa fa fa-trash";
+			btnAnular.title="Cambiar Estado a Anulada";
+			btnAnular.addEventListener("click", function(){
+				changeEstado(item);
+			});
+
+			btnImp.className="btn-fa fa fa-print";
+			btnImp.title="Imprimir";
+			btnImp.addEventListener("click", function(){
+				printFactura(item);
+			});
+
+			if(parseInt(item.estado)==1){
+				td.appendChild(btnAnular);
+				td.appendChild(btnImp);
+			}
+			return td;
+		}});
+		var controller = {
+			loadData: function(filter) {
+				var data={module:'dash',method:'getVentas',filters:{}};
+				if(typeof filter.metaData.Certificacion.NumeroAutorizacion.Numero!=='undefined'){
+					data.filters.numero=filter.metaData.Certificacion.NumeroAutorizacion.Numero;
+				}
+				if(typeof filter.metaData.Certificacion.NumeroAutorizacion.Serie!=='undefined'){
+					data.filters.serie=filter.metaData.Certificacion.NumeroAutorizacion.Serie;
+				}
+				if(typeof filter.cliente!=='undefined'){
+					if(typeof filter.cliente.NombreReceptor!=='undefined'){
+						data.filters.cliente=filter.cliente.NombreReceptor;
+					}
+					if(typeof filter.cliente.IDReceptor!=='undefined'){
+						data.filters.nit=filter.cliente.IDReceptor;
+					}
+				}
+				var d = $.Deferred();
+				$.ajax({
+					url: "index.php",
+					method:"POST",
+					contentType:"application/json",
+					processData: false,
+					dataType: "json",
+					data: JSON.stringify(data)
+				}).done(function(response) {
+					d.resolve(response.ventas);
+					window.granTotal=0;
+				});
+				return d.promise();
+			}
+		};
+		core.drawTableData({
+			data:{},
+			controller:controller,
+			filtering:true,
+			fields:fields,
+			ocEvent:null,
+			objetoDom:"#workArea",
+			titulo:null,
+			cvs:true,
+			pageSize:100,
+			height:"auto"
+		});
+		
+	}
+	function go2templates(){
+		core.callApiRest({module:'templates',method:'showView',methodCB:'getData',view:'inicio',objetoDom:'.PostContent'});
+	}
+	function SAT(){
+		var a = document.createElement('a');
+		a.href = 'https://farm3.sat.gob.gt/menu/login.jsp';
+		a.target = '_blank';
+		a.referrerpolicy='no-referrer';
+		a.rel = 'noreferrer'
+		a.click();
+	}
+	function importXML(){
+		if(__LIC.licencia>0 && parseInt(__LIC.tsFin)>(today.getTime()/1000)){
+			var inFile = document.createElement('input');
+			inFile.type='file';
+			inFile.addEventListener("change", function(e){
+				var files = e.target.files;
+				if(files.length>0){
+					workXML(files);
+				}
+			});
+			inFile.click();
+		} else {
+			noLicense();
+		}
+		
+	}
+	function workXML(files){
+		var reader = new FileReader();
+		//reader.readAsDataURL(files[0]);
+		reader.readAsText(files[0]);
+		reader.onloadend = function () {
+			var parser = new DOMParser();
+			var xml=parser.parseFromString(reader.result.replace(/dte:/g, ''),"text/xml");
+			var fac=JSON.parse(core.xml2json(xml,''));
+			console.warn(fac.GTDocumento.SAT.DTE.DatosEmision.Emisor.NITEmisor.toString(),__SESSION.nit.toString());
+			if(fac.GTDocumento.SAT.DTE.DatosEmision.Emisor.NITEmisor.toString()==__SESSION.nit.toString()){
+				saveVenta(fac.GTDocumento.SAT.DTE);
+			} else {
+				core.alertMod('El NIT de este documento XML no concuerda con el NIT Registrado!');
+			}
+		}
+	}
+	function saveVenta(obj){
+		console.warn(obj);
+		core.callApiRest({
+			requestMethod:'POST',
+			module:'dash',
+			method:'saveVenta',
+			methodCB:'resSaveVenta',
+			dte:obj
+		});
+	}
+	function resSaveVenta(res){
+		if(res.code==1){
+			closeNav();
+			getVentas();
+			core.alertMod(res.msj,2500,false);
+			printFactura(res);
+		} else {
+			core.alertMod(res.msj,2500,true);
+		}
+	}
+	function printFactura(item){
+		//console.clear();
+		var params={};
+		params.venta=item.metaData;
+		params.idVenta=item.idVenta;
+		params.view='printFactura';
+		params.width=800;
+		params.height=600;
+		params.requestMethod='POST';
+		params.module='dash';
+		params.method='showView';
+		params.title='Ver Factura';
+		if(__LIC.licencia>0 && parseInt(__LIC.tsFin)>(today.getTime()/1000)){
+			core.openBoxMulti(params);
+		} else {
+			noLicense();
+		}
+	}
+	function changeEstado(item){
+		var estado=1;
+		if(item.estado==1){
+			estado=0;
+		}
+		var paramsBox={};
+		paramsBox.title='Anular!!!';
+		paramsBox.msj='estas seguro de anular esta venta no se puede revertir este estado.';
+		paramsBox.callMethod=function(){ 
+			var params={};
+			params.module='dash';
+			params.method='changeEstado';
+			params.methodCB='resChangeEstado';
+			params.idVenta=item.idVenta;
+			params.estado=estado;
+			core.sendForm(params); 
+		};
+		core.confirmBox(paramsBox);
+	}
+	function resChangeEstado(json){
+        if(json.code==1){
+			getVentas();
+		} else {
+			core.alertMod(json.msj);
+		}
+    }
+
+	function getDataReport(tipo){
+		var tables = document.getElementById('workArea').getElementsByTagName("table");
+		if(tables.length>0){
+			var allTables=document.createElement("table");
+			Object.keys(tables).forEach(key=> {
+				Object.keys(tables[key].rows).forEach(element=> {
+					if(tables[key].rows[element].style.display!='none' && tables[key].rows[element].tagName=='TR'){
+						var trt=core.htmlToNodeDom(tables[key].rows[element].outerHTML);
+						var tr=document.createElement("tr");
+						Object.keys(trt.cells).forEach(td=> {
+							if((trt.cells[td].innerHTML.search('input') > -1) || (trt.cells[td].innerHTML.search('button') > -1)){
+								tr.appendChild(document.createElement(trt.cells[td].nodeName));
+							} else {
+								trt.cells[td].style.padding='5px';
+								trt.cells[td].width=null;
+								trt.cells[td].className=null;
+								tr.appendChild(core.htmlToNodeDom(trt.cells[td].outerHTML));
+							}
+						});
+						allTables.appendChild(tr);		
+					}
+				});
+			});
+			if(tipo=='json'){
+				return core.tableToJson(allTables);	
+			} else {
+				return allTables.outerHTML;
+			}
+		} else {
+			if(tipo=='json'){
+				return {};	
+			} else {
+				return "";
+			}
+		}
+	}
+	function exportPdf(){
+		var html=getDataReport('table');
+		if(html.length>0){
+			core.alertMod('Generando PDF');
+			var params={};
+			params.requestMethod='POST';
+			params.module='dash';
+			params.method='showView';
+			params.view='viewGenPdf';
+			params.width=800;
+			params.height=600;
+			params.title='Generando PDF...';
+			params.table=html;
+			params.total=null;
+			params.titulo='Consulta_Ventas_'+today.customFormat("#DD#_#MM#_#YYYY#");
+			core.openBoxMulti(params);
+		} else {
+			core.alertMod('Selecciona primero un reporte! no hay datos para realizar el PDF');
+		}
+	}
+	function exportExcel(){
+		var data=getDataReport('json');
+		if(data.length>0){
+			core.JSONToCSVConverter('Consulta_Ventas_'+today.customFormat("#DD#_#MM#_#YYYY#"), true, data);
+		} else {
+			core.alertMod('Selecciona primero un reporte! no hay datos para realizar el Excel/CSV');
+		}
+	}
+	function setConfigSmtp(){
+		//console.clear();
+		var params={};
+		params.view='configSmtp';
+		params.width=800;
+		params.height=600;
+		params.requestMethod='POST';
+		params.module='dash';
+		params.method='showView';
+		params.title='Configurar Envio de Correos';
+		core.openBoxMulti(params);
+	}
+	function noLicense(){
+		//console.clear();
+		var params={};
+		params.view='noLicense';
+		params.width=800;
+		params.height=600;
+		params.requestMethod='POST';
+		params.module='dash';
+		params.method='showView';
+		params.title='Comprar mas Tiempo';
+		core.openBoxMulti(params);
+	}
+	function helpMe(item){
+		//console.clear();
+		var params={};
+		params.view='helpMe';
+		params.width=800;
+		params.height=600;
+		params.requestMethod='POST';
+		params.module='dash';
+		params.method='showView';
+		params.title='Ayuda';
+		core.openBoxMulti(params);
+	}
+	function logOut(){
+		core.callApiRest({module:'dash',method:'logOut',methodCB:'resLogOut'});
+	}
+	function resLogOut(){
+		window.location='index.php';
+	}
+	core.callApiRest({requestMethod:'POST',module:'dash',method:'showView',methodCB:'initialize',view:'sideNav',objetoDom:'#sideNav'});
+</script>

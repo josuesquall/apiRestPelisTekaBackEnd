@@ -1,0 +1,10 @@
+{
+	"menu":[
+		{"label":"Opciones","link":"","estado":"on","submenu":"si"},
+		{"label":"Modulos","link":"","estado":"on","submenu":"si"}
+	]
+	
+}
+
+
+

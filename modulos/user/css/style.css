@@ -1,0 +1,101 @@
+.ghead{
+	width:98%;
+	min-height:350px;
+	clear: both;
+	padding: 10px;
+}
+.ghead #dataText{
+	background:#FFFFFF;
+	width:58%;
+	padding: 10px;
+	float:right;
+	border-radius: 5px;
+	border: solid 1px #333333;
+	margin-bottom: 5px;
+}
+.ghead #dataText div{
+	float:right;
+	margin-left: 25px;
+}
+.ghead #dataText .title{
+	line-height: 1px;
+	font-weight: bold;
+	font-size: 14px;
+	text-align: center;
+	color: #333333;
+}
+.ghead #dataText .content{
+	line-height: 1px;
+	font-weight: bold;
+	font-size: 20px;
+	color:#0000ff;
+	text-align: center;
+}
+.ghead #ventasDiarias{
+	background:#FFFFFF;
+	width:38%;
+	height: 475px;
+	padding: 10px;
+	float:left;
+	border-radius: 5px;
+	border: solid 1px #333333;
+}
+.ghead #ventasDiariasAN{
+	background:#FFFFFF;
+	width:58%;
+	padding: 10px;
+	float:right;
+	border-radius: 5px;
+	border: solid 1px #333333;
+}
+.ghead #productos{
+	width:48%;
+	float:left;
+	padding:10px;
+	background:#FFFFFF;
+	border-radius: 5px;
+	border: solid 1px #333333;
+	margin-right: 5px;
+}
+.ghead #costos{
+	width:48%;
+	float:left;
+	padding:10px;
+	background:#FFFFFF;
+	border-radius: 5px;
+	border: solid 1px #333333;
+}
+
+@media (max-width: 479px) {
+	.ghead{
+		width:85%;
+		min-height:350px;
+		clear: both;
+		padding: 2px;
+	}
+	.ghead #dataText{
+		width:100%;
+		float: none;;
+		padding:2px;
+	}
+	.ghead #ventasDiarias{
+		width:100%;
+		float: none;;
+		padding:2px;
+	}
+	.ghead #ventasDiariasAN{
+		width:100%;
+		float: none;;
+		padding:2px;
+	}
+	.ghead #productos{
+		width:100%;
+		float: none;;
+		padding:2px;
+	}
+	.ghead #costos{
+		width:100%;
+		float: none;;
+		padding:2px;
+	}
+}
